@@ -163,4 +163,151 @@ plt <- plt +
 plt
 
 
+# circular barplot --------------------------------------------------------
+
+hike_data <- readr::read_rds('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-11-24/hike_data.rds')
+
+#将hike_data数据框中的location列中的每个元素按照分隔符" -- "分割，并提取出第一个部分作为新的region列。as.factor()函数将region列转换为因子变量。
+hike_data$region <- as.factor(word(hike_data$location, 1, sep = " -- "))
+
+#将hike_data数据框中的length列中的每个元素按照空格分割，并提取出第一个部分作为新的length_num列。as.numeric()函数将length_num列转换为数值型。
+hike_data$length_num <- as.numeric(sapply(strsplit(hike_data$length, " "), "[[", 1))
+
+
+plot_df <- hike_data %>%
+  group_by(region) %>%    #按region分组
+  summarise(
+    sum_length = sum(length_num),  #每个分组中的length_num列的总和
+    mean_gain = mean(as.numeric(gain)), #计算每个分组中的gain列的平均值
+    n = n()  #计算每个分组中的行数
+  ) %>%
+  mutate(mean_gain = round(mean_gain, digits = 0)) #将mean_gain列的数值取整为0位小数。
+
+
+
+#基本雷达图
+plt <- ggplot(plot_df) +
+  geom_hline(  #geom_hline()函数绘制水平线，用于创建自定义的面板网格。
+    aes(yintercept = y),  #设置水平线的y轴截距为y
+    data.frame(y = c(0:3) * 1000), #创建一个数据框，其中包含了4个水平线的y轴截距（0、1000、2000和3000）。
+    color = "lightgrey"
+  ) + 
+  geom_col(
+    aes( #设置x轴为region列的值，使用sum_length列的值作为y轴，使用n列的值作为填充颜色。
+      x = reorder(str_wrap(region, 5), sum_length),
+      y = sum_length,
+      fill = n
+    ),
+    position = "dodge2", #设置条形图的位置为"dodge2"，使得条形图在同一位置堆叠。
+    show.legend = TRUE,
+    alpha = .9
+  ) +
+  geom_point(
+    aes(  #设置x轴为region列的值，使用mean_gain列的值作为y轴。
+      x = reorder(str_wrap(region, 5),sum_length), 
+      y = mean_gain
+    ),
+    size = 3,
+    color = "gray12"  #设置点的颜色为灰色。
+  ) +
+  geom_segment(  #geom_segment()函数绘制线段图。
+    aes(  #设置起点和终点的x轴为region列的值，起点的y轴为0，终点的y轴为3000。
+      x = reorder(str_wrap(region, 5), sum_length),
+      y = 0,
+      xend = reorder(str_wrap(region, 5), sum_length),
+      yend = 3000
+    ),
+    linetype = "dashed",
+    color = "gray12"
+  ) + 
+  coord_polar()  #将坐标系设置为极坐标，使图表呈现圆形的形状。
+plt
+
+#添加批注和图例
+plt <- plt +
+  annotate(   #annotate()函数在图表中添加注释
+    x = 11,   #注释的位置
+    y = 1300,
+    label = "Mean Elevation Gain\n[FASL]", #注释的文本
+    geom = "text", #注释的几何形状
+    angle = -67.5,  #注释的角度
+    color = "gray12",  #注释的颜色
+    size = 2.5,
+  ) +
+  annotate(
+    x = 11, 
+    y = 3150,
+    label = "Cummulative Length [FT]",
+    geom = "text",
+    angle = 23,
+    color = "gray12",
+    size = 2.5,
+  ) +
+  annotate(
+    x = 11.7, 
+    y = 1100, 
+    label = "1000", 
+    geom = "text", 
+    color = "gray12", 
+  ) +
+  annotate(
+    x = 11.7, 
+    y = 2100, 
+    label = "2000", 
+    geom = "text", 
+    color = "gray12", 
+  ) +
+  annotate(
+    x = 11.7, 
+    y =3100, 
+    label = "3000", 
+    geom = "text", 
+    color = "gray12", 
+  ) +
+  scale_y_continuous(  #设置y轴的连续刻度
+    limits = c(-1500, 3500),  #设置y轴的取值范围
+    expand = c(0, 0),  #设置y轴的扩展。
+    breaks = c(0, 1000, 2000, 3000) #设置y轴的刻度值。
+  ) + 
+  scale_fill_gradientn(  #设置填充颜色的渐变。
+    "Amount of Tracks",  #设置图例的标题为"Amount of Tracks"。
+    colours = c( "#6C5B7B","#C06C84","#F67280","#F8B195") #设置填充颜色的渐变。
+  ) +
+  guides(  #设置图例的样式。
+    fill = guide_colorsteps(  #设置填充颜色的图例样式。
+      barwidth = 15, barheight = .5, title.position = "top", title.hjust = .5
+    )
+  ) +
+  theme(
+    axis.title = element_blank(),#设置轴标题的样式。
+    axis.ticks = element_blank(),#设置轴刻度线的样式。
+    axis.text.y = element_blank(),#设置y轴刻度标签的样式
+    axis.text.x = element_text(color = "gray12", size = 12),#设置x轴刻度标签的样式
+    legend.position = "bottom",#设置图例的位置。
+  )
+
+#最终调整
+plt <- plt + 
+  labs(
+    title = "\nHiking Locations in Washington",  #设置图表的主标题。
+    subtitle = paste(    #设置图表的副标题
+      "\nThis Visualisation shows the cummulative length of tracks,",
+      "the amount of tracks and the mean gain in elevation per location.\n",
+      "If you are an experienced hiker, you might want to go",
+      "to the North Cascades since there are a lot of tracks,",
+      "higher elevations and total length to overcome.",
+      sep = "\n"
+    ),
+    caption = "\n\nData Visualisation by Tobias Stalder\ntobias-stalder.netlify.app\nSource: TidyX Crew (Ellis Hughes, Patrick Ward)\nLink to Data: github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-11-24/readme.md") +
+  #设置图表的注释。
+  theme(
+    text = element_text(color = "gray12"), #设置文本的颜色。
+    plot.title = element_text(face = "bold", size = 25, hjust = 0.05),#设置图表主标题的样式。
+    plot.subtitle = element_text(size = 14, hjust = 0.05),#设置图表副标题的样式
+    plot.caption = element_text(size = 10, hjust = .5), #设置图表注释的样式。
+    panel.background = element_rect(fill = "white", color = "white"),#设置图表背景的填充颜色。
+    panel.grid = element_blank(),#设置图表网格线的样式。
+    panel.grid.major.x = element_blank()  #设置x轴主要网格线的样式。
+  )
+plt
 
